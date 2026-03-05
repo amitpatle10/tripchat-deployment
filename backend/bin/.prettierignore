@@ -1,0 +1,7 @@
+target/
+.apt_generated_tests/
+.vscode/
+.claude/
+src/
+*.java
+pom.xml

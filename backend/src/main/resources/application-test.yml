@@ -1,0 +1,15 @@
+spring:
+  # Disable auto-configuration for external dependencies in unit tests.
+  # All repositories, Redis, and Kafka are mocked via Mockito — no real
+  # connections needed. Tests are fast, isolated, and run without any
+  # infrastructure running locally or in CI.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+
+jwt:
+  secret: test-secret-key-for-unit-tests-only-not-for-production
+  expiration: 3600000

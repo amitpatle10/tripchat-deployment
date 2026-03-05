@@ -1,0 +1,106 @@
+import { screen } from '@testing-library/react'
+import { renderWithProviders } from '@/test/utils'
+import MessageInput from './MessageInput'
+
+describe('MessageInput', () => {
+  // ─── Initial state ────────────────────────────────────────────────
+
+  it('renders an empty textarea and a disabled send button', () => {
+    renderWithProviders(<MessageInput onSend={vi.fn()} sendTyping={vi.fn()} />)
+    expect(screen.getByLabelText('Message input')).toHaveValue('')
+    expect(screen.getByRole('button', { name: /send message/i })).toBeDisabled()
+  })
+
+  // ─── Send button enabled/disabled ─────────────────────────────────
+
+  it('enables send button when textarea has non-whitespace content', async () => {
+    const { user } = renderWithProviders(<MessageInput onSend={vi.fn()} sendTyping={vi.fn()} />)
+
+    await user.type(screen.getByLabelText('Message input'), 'Hello')
+
+    expect(screen.getByRole('button', { name: /send message/i })).not.toBeDisabled()
+  })
+
+  it('keeps send button disabled when textarea contains only whitespace', async () => {
+    const { user } = renderWithProviders(<MessageInput onSend={vi.fn()} sendTyping={vi.fn()} />)
+
+    await user.type(screen.getByLabelText('Message input'), '   ')
+
+    expect(screen.getByRole('button', { name: /send message/i })).toBeDisabled()
+  })
+
+  // ─── Sending — button click ───────────────────────────────────────
+
+  it('calls onSend with trimmed content when send button is clicked', async () => {
+    const onSend = vi.fn()
+    const { user } = renderWithProviders(<MessageInput onSend={onSend} sendTyping={vi.fn()} />)
+
+    await user.type(screen.getByLabelText('Message input'), '  Hello!  ')
+    await user.click(screen.getByRole('button', { name: /send message/i }))
+
+    expect(onSend).toHaveBeenCalledWith('Hello!')
+  })
+
+  it('clears the textarea after sending via button click', async () => {
+    const { user } = renderWithProviders(<MessageInput onSend={vi.fn()} sendTyping={vi.fn()} />)
+
+    await user.type(screen.getByLabelText('Message input'), 'Hello!')
+    await user.click(screen.getByRole('button', { name: /send message/i }))
+
+    expect(screen.getByLabelText('Message input')).toHaveValue('')
+  })
+
+  // ─── Sending — Enter key ──────────────────────────────────────────
+
+  it('calls onSend when Enter is pressed', async () => {
+    const onSend = vi.fn()
+    const { user } = renderWithProviders(<MessageInput onSend={onSend} sendTyping={vi.fn()} />)
+
+    await user.type(screen.getByLabelText('Message input'), 'Hello!{Enter}')
+
+    expect(onSend).toHaveBeenCalledWith('Hello!')
+  })
+
+  it('does not call onSend when Shift+Enter is pressed (newline intent)', async () => {
+    const onSend = vi.fn()
+    const { user } = renderWithProviders(<MessageInput onSend={onSend} sendTyping={vi.fn()} />)
+
+    await user.type(screen.getByLabelText('Message input'), 'Hello!{Shift>}{Enter}{/Shift}')
+
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('does not call onSend when Enter is pressed on empty input', async () => {
+    const onSend = vi.fn()
+    const { user } = renderWithProviders(<MessageInput onSend={onSend} sendTyping={vi.fn()} />)
+
+    await user.type(screen.getByLabelText('Message input'), '{Enter}')
+
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  // ─── Typing indicator callbacks ───────────────────────────────────
+
+  it('calls sendTyping(true) when user starts typing', async () => {
+    const sendTyping = vi.fn()
+    const { user } = renderWithProviders(
+      <MessageInput onSend={vi.fn()} sendTyping={sendTyping} />,
+    )
+
+    await user.type(screen.getByLabelText('Message input'), 'H')
+
+    expect(sendTyping).toHaveBeenCalledWith(true)
+  })
+
+  it('calls sendTyping(false) after the message is sent', async () => {
+    const sendTyping = vi.fn()
+    const { user } = renderWithProviders(
+      <MessageInput onSend={vi.fn()} sendTyping={sendTyping} />,
+    )
+
+    await user.type(screen.getByLabelText('Message input'), 'Hello!{Enter}')
+
+    // sendTyping(false) should have been called to stop the indicator
+    expect(sendTyping).toHaveBeenCalledWith(false)
+  })
+})

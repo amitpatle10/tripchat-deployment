@@ -1,0 +1,157 @@
+services:
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  # postgres:16-alpine — small footprint, LTS release.
+  # Data persisted in a named volume so it survives container restarts.
+  # Health check ensures downstream services only start when Postgres is ready.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB:       ${DB_NAME:-tripchat}
+      POSTGRES_USER:     ${DB_USERNAME:-tripchat}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-tripchat}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-tripchat} -d ${DB_NAME:-tripchat}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"   # exposed for local DB tools (TablePlus, DBeaver)
+
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  # redis:7-alpine. If REDIS_PASSWORD is set in .env, Redis requires auth.
+  # The empty-string default disables auth for local dev convenience.
+  redis:
+    image: redis:7-alpine
+    command: >
+      sh -c '
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          redis-server --requirepass "$$REDIS_PASSWORD"
+        else
+          redis-server
+        fi
+      '
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6379:6379"   # exposed for local Redis clients (RedisInsight, redis-cli)
+
+
+  # ── Kafka (KRaft mode — no Zookeeper) ────────────────────────────────────────
+  # apache/kafka — official Apache image, KRaft mode (no Zookeeper).
+  #
+  # Two listeners:
+  #   PLAINTEXT://kafka:9092   — used by other containers (backend) on the Docker network
+  #   EXTERNAL://localhost:29092 — used by tools on the host machine (kafka-ui, CLI)
+  #
+  # Tradeoff: single-node Kafka (replication-factor=1) is fine for dev and
+  # up to ~1000 DAU. Add broker replicas and increase replication factor for prod.
+  kafka:
+    image: apache/kafka:latest
+    environment:
+      # KRaft mode — combined broker + controller on one node
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      # Listeners: internal (Docker network) + controller + external (host)
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://kafka:9093,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # Topic defaults
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s   # Kafka takes time to initialize KRaft metadata
+    ports:
+      - "29092:29092"     # host access via localhost:29092
+
+
+  # ── Spring Boot Backend ───────────────────────────────────────────────────────
+  # Built from ./backend/Dockerfile (multi-stage: Maven build → JRE runtime).
+  # Waits for postgres, redis, and kafka to pass health checks before starting.
+  # All connection strings point to container names (Docker's internal DNS).
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      # Database — overrides application.yml defaults with container hostname
+      DB_HOST:     postgres
+      DB_USERNAME: ${DB_USERNAME:-tripchat}
+      DB_PASSWORD: ${DB_PASSWORD:-tripchat}
+
+      # Redis
+      REDIS_HOST:     redis
+      REDIS_PORT:     6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+      # Kafka — connects via Docker internal listener
+      KAFKA_SERVERS: kafka:9092
+
+      # JWT — MUST be set in .env for production
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+
+      # Spring profile (optional: add application-docker.yml for docker-specific overrides)
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      # Requires spring-boot-starter-actuator on the classpath.
+      # If not added yet, change to: curl -f http://localhost:8080/api/health || exit 1
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 45s   # Spring Boot + Hibernate startup takes ~20-40s
+
+
+  # ── React / Nginx Frontend ───────────────────────────────────────────────────
+  # Built from ./frontend/Dockerfile (multi-stage: Vite build → Nginx static).
+  # nginx.conf proxies /api/* and /ws to the backend container.
+  # In production, consider replacing this with a CDN (CloudFront, Cloudflare).
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+
+# ── Named Volumes ─────────────────────────────────────────────────────────────
+# Named volumes survive container removal (docker compose down).
+# Use docker compose down -v to also remove volumes (WARNING: destroys data).
+volumes:
+  postgres_data:
+  redis_data:

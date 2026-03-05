@@ -1,0 +1,99 @@
+spring:
+  application:
+    name: tripchat-backend
+
+  # ── DATABASE (PostgreSQL) ──────────────────────────────────────────────────
+  # HikariCP is the default connection pool in Spring Boot.
+  # maximum-pool-size: 10 is conservative for 1000 DAUs — revisit under load.
+  # Tradeoff: more connections = more memory on DB server, fewer = more queuing.
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tripchat
+    username: ${DB_USERNAME:tripchat}
+    password: ${DB_PASSWORD:tripchat}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000   # 30s — fail fast if DB is unreachable
+      idle-timeout: 600000        # 10min — release idle connections
+      max-lifetime: 1800000       # 30min — recycle connections to avoid stale
+
+  # ── JPA / HIBERNATE ───────────────────────────────────────────────────────
+  # ddl-auto: validate — Hibernate validates schema against entities but never
+  # modifies it. We own the schema; Hibernate doesn't touch it in production.
+  # Use 'create-drop' only in dev if you want Hibernate to manage schema.
+  # show-sql: false in prod — SQL logging via AOP instead (structured).
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        default_schema: public
+
+  # ── REDIS ─────────────────────────────────────────────────────────────────
+  # Lettuce client (default). Single shared connection — thread-safe.
+  # Deep dive on data structures and cache patterns before first use.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms             # fail fast on Redis unavailability
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
+
+  # ── KAFKA ─────────────────────────────────────────────────────────────────
+  # Deep dive on internals before first use.
+  # acks=all: producer waits for all in-sync replicas to confirm write.
+  # Tradeoff: higher durability, slightly higher latency vs acks=1.
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: tripchat-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "com.tripchat.*"
+
+  # ── SECURITY ──────────────────────────────────────────────────────────────
+  # Disable Spring Security's default login page — we handle auth ourselves.
+  security:
+    user:
+      name: disabled
+      password: disabled
+
+# ── SERVER ────────────────────────────────────────────────────────────────────
+server:
+  port: 8080
+  error:
+    include-message: always       # include error message in response body
+    include-binding-errors: always
+
+# ── JWT CONFIG ────────────────────────────────────────────────────────────────
+# Secret injected via environment variable — never hardcode in source.
+# expiration: 86400000ms = 24 hours. Tradeoff: longer = fewer logins,
+# but a stolen token is valid longer. Refresh token strategy can mitigate this.
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  expiration: 86400000
+
+# ── LOGGING ───────────────────────────────────────────────────────────────────
+# AOP logs execution time at INFO. Set com.tripchat to DEBUG during development.
+logging:
+  level:
+    root: INFO
+    com.tripchat: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: INFO

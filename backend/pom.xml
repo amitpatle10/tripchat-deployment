@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ===================== PROJECT IDENTITY ===================== -->
+    <groupId>com.tripchat</groupId>
+    <artifactId>tripchat-backend</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>tripchat-backend</name>
+    <description>TripChat — Real-time group chat backend</description>
+    <packaging>jar</packaging>
+
+    <!-- ===================== SPRING BOOT PARENT =====================
+         Inherits dependency management, plugin versions, and sensible
+         defaults. This is the BOM (Bill of Materials) pattern —
+         Spring Boot manages all compatible library versions for us.
+         We override only when necessary.
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.4.3</version>
+        <relativePath/>
+    </parent>
+
+    <!-- ===================== GLOBAL PROPERTIES ===================== -->
+    <properties>
+        <java.version>21</java.version>
+        <!-- jjwt split into 3 artifacts — keep version in one place -->
+        <jjwt.version>0.12.6</jjwt.version>
+    </properties>
+
+    <!-- ===================== DEPENDENCIES ===================== -->
+    <dependencies>
+
+        <!-- ── GROUP 1: CORE WEB ─────────────────────────────────────
+             spring-boot-starter-web:
+               Pulls in Spring MVC + embedded Tomcat.
+               Tomcat chosen over reactive (WebFlux) for simplicity
+               and thread-per-request model — sufficient for 1000 DAUs.
+
+             spring-boot-starter-validation:
+               Bean Validation (JSR-380) — @Valid, @NotNull, @Email etc.
+               on DTOs. Fail fast at the controller layer, before
+               business logic runs.
+
+             spring-boot-starter-aop:
+               Aspect-Oriented Programming — used for execution time
+               logging on every service method (CLAUDE.md requirement).
+               Pattern: Decorator / Proxy — adds cross-cutting behavior
+               without modifying service classes.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
+        <!-- ── GROUP 2: DATABASE ─────────────────────────────────────
+             spring-boot-starter-data-jpa:
+               Hibernate ORM + Spring Data repositories.
+               Chosen over raw JDBC for productivity — clean
+               @Repository interfaces, entity mapping, transaction mgmt.
+               We'll use native queries only for complex cases.
+
+             postgresql:
+               JDBC driver for PostgreSQL. Runtime scope — only needed
+               when the app runs, not at compile time.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ── GROUP 3: REDIS ────────────────────────────────────────
+             spring-boot-starter-data-redis:
+               Includes Lettuce client (default) + Spring Data Redis.
+               Lettuce chosen over Jedis — non-blocking, single shared
+               connection, better memory efficiency under concurrency.
+               Deep dive on data structures + patterns when we use it.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- ── GROUP 4: KAFKA ────────────────────────────────────────
+             spring-kafka:
+               KafkaTemplate (producer) + @KafkaListener (consumer).
+               Full deep dive on internals before use — topics,
+               partitions, consumer groups, offsets, acks, DLQ.
+        -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <!-- aws-msk-iam-auth: provides the IAMLoginModule and
+             IAMClientCallbackHandler that the Kafka client uses to
+             authenticate to MSK Serverless via AWS IAM (SASL_SSL).
+             The ECS task role supplies the credentials automatically. -->
+        <dependency>
+            <groupId>software.amazon.msk</groupId>
+            <artifactId>aws-msk-iam-auth</artifactId>
+            <version>2.1.1</version>
+        </dependency>
+
+        <!-- ── GROUP 5: SECURITY + JWT ───────────────────────────────
+             spring-boot-starter-security:
+               Security filter chain, authentication manager wiring.
+               Base for our Strategy Pattern auth implementation.
+               Extensible later for OAuth2 (Login with Google).
+
+             jjwt (3 artifacts — api / impl / jackson):
+               api:     Interfaces — what we code against (compile)
+               impl:    Implementation — loaded at runtime only
+               jackson: JSON serialization for JWT claims (runtime)
+               Split design = clean separation of contract vs impl.
+               Chosen over nimbus-jose-jwt (too complex) and
+               java-jwt/auth0 (less flexible).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ── GROUP 6: WEBSOCKET ────────────────────────────────────
+             spring-boot-starter-websocket:
+               WebSocket protocol + STOMP message broker support.
+               STOMP gives us pub/sub semantics over WebSocket —
+               subscribe to /topic/group/{id}, publish to /app/send.
+               Deep dive on WebSocket vs SSE vs polling before use.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
+        <!-- ── GROUP 7: DEVELOPER EXPERIENCE ─────────────────────────
+             lombok:
+               Compile-time annotation processor — generates getters,
+               setters, builders, constructors. Reduces boilerplate.
+               optional=true: not transitive to consumers of this lib.
+
+             spring-boot-devtools:
+               Hot reload during development. Runtime + optional only
+               — never packaged in production jar.
+        -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- ── GROUP 8: ACTUATOR ─────────────────────────────────────
+             spring-boot-starter-actuator:
+               Exposes /actuator/health — used by Docker health checks
+               and load balancers to verify the app is ready.
+               Only the health endpoint is exposed (configured in application.yml).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- ── GROUP 9: TESTING ──────────────────────────────────────
+             Strategy: Unit tests with mocking only (JUnit 5 + Mockito).
+             No in-memory DB — repositories are mocked via @Mock.
+             This keeps tests fast, isolated, and dependency-free.
+
+             spring-boot-starter-test:
+               JUnit 5 + Mockito + AssertJ. Core unit testing toolkit.
+               Mockito handles @Mock, @InjectMocks, when/thenReturn.
+
+             spring-security-test:
+               @WithMockUser — test secured endpoints without a real
+               auth flow. Simulates authenticated principal in context.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <!-- ===================== BUILD ===================== -->
+    <build>
+        <plugins>
+            <!-- Packages app as executable fat jar.
+                 Excludes lombok from final artifact (annotation processing
+                 is compile-time only). -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

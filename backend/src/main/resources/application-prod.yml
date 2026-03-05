@@ -1,0 +1,32 @@
+spring:
+  jpa:
+    hibernate:
+      # validate: Hibernate checks that entity fields match columns but never
+      # modifies the schema. All DDL changes go through Flyway migrations instead.
+      ddl-auto: validate
+  datasource:
+    hikari:
+      # RDS db.t3.micro supports ~80 concurrent connections.
+      # 20 leaves headroom for admin tooling and future services on the same instance.
+      maximum-pool-size: 20
+  kafka:
+    properties:
+      # MSK Serverless requires IAM authentication over TLS (port 9098).
+      # The ECS task role provides AWS credentials — no static keys needed.
+      # Bracket notation preserves the dots in the Kafka property key names;
+      # without brackets, Spring Boot would try to nest security → protocol
+      # rather than treating "security.protocol" as a single map key.
+      "[security.protocol]": SASL_SSL
+      "[sasl.mechanism]": AWS_MSK_IAM
+      "[sasl.jaas.config]": "software.amazon.msk.auth.iam.IAMLoginModule required;"
+      "[sasl.client.callback.handler.class]": software.amazon.msk.auth.iam.IAMClientCallbackHandler
+
+# CORS allowed origins — set via the ALLOWED_ORIGINS environment variable in ECS.
+# Example: https://yourdomain.com,https://www.yourdomain.com
+cors:
+  allowed-origins: ${ALLOWED_ORIGINS}
+
+logging:
+  level:
+    com.tripchat: INFO          # reduce verbose DEBUG noise in prod
+    org.hibernate.SQL: WARN     # suppress per-query SQL logging

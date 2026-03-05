@@ -1,0 +1,14 @@
+spring:
+  jpa:
+    hibernate:
+      # update: Hibernate syncs schema changes without dropping data.
+      # Safer than create-drop (which wipes data on restart).
+      # Never use in production — use validate there.
+      ddl-auto: update
+    show-sql: false
+
+logging:
+  level:
+    com.tripchat: DEBUG
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN
