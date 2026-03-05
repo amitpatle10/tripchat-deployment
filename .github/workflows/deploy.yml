@@ -18,6 +18,7 @@ jobs:
   deploy-backend:
     name: Build & Deploy Backend
     runs-on: ubuntu-latest
+    environment: Prod
     permissions:
       id-token: write   # required for OIDC token exchange
       contents: read
@@ -72,6 +73,7 @@ jobs:
   deploy-frontend:
     name: Build & Deploy Frontend
     runs-on: ubuntu-latest
+    environment: Prod
     permissions:
       id-token: write
       contents: read
