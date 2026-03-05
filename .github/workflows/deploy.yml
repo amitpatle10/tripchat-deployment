@@ -9,7 +9,7 @@ env:
   ECR_REPOSITORY: tripchat-backend
   ECS_CLUSTER: tripchat
   ECS_SERVICE: tripchat-backend
-  S3_BUCKET: tripchat-frontend
+  S3_BUCKET: tripchat-frontend-010741811423
 
 jobs:
   # ── Backend ────────────────────────────────────────────────────────────────
