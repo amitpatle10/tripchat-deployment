@@ -101,6 +101,21 @@ management:
     health:
       show-details: never   # returns {"status":"UP"} only — no internal detail exposed
 
+# ── RATE LIMITING ─────────────────────────────────────────────────────────────
+# Token Bucket via Bucket4j + Redis. Per-IP buckets; keys expire after 1h idle.
+# intervally: all tokens refill at once after window — stricter, best for auth.
+# greedy: tokens drip back smoothly — better UX for general API.
+rate-limit:
+  login:
+    capacity: 5          # 5 attempts per window
+    refill-minutes: 1    # window = 1 minute (intervally)
+  register:
+    capacity: 3          # 3 registrations per window
+    refill-minutes: 10   # window = 10 minutes (intervally)
+  general:
+    capacity: 60         # 60 requests per minute
+    refill-minutes: 1    # window = 1 minute (greedy)
+
 # ── LOGGING ───────────────────────────────────────────────────────────────────
 # AOP logs execution time at INFO. Set com.tripchat to DEBUG during development.
 logging:

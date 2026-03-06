@@ -119,6 +119,20 @@
             <version>2.1.1</version>
         </dependency>
 
+        <!-- ── GROUP 4b: RATE LIMITING ──────────────────────────────
+             bucket4j-redis:
+               Distributed token-bucket rate limiting backed by Redis.
+               LettuceBasedProxyManager stores per-IP bucket state in Redis
+               as compact byte arrays — works across all ECS instances.
+               Chosen over Guava RateLimiter (in-memory, single-instance only)
+               and Spring Cloud Gateway (separate service, overkill for 1000 DAUs).
+        -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-lettuce</artifactId>
+            <version>8.16.1</version>
+        </dependency>
+
         <!-- ── GROUP 5: SECURITY + JWT ───────────────────────────────
              spring-boot-starter-security:
                Security filter chain, authentication manager wiring.
