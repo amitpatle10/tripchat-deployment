@@ -1,6 +1,5 @@
 import axios from 'axios'
 import { useAuthStore } from '@/store/authStore'
-import { router } from '@/lib/router'
 
 const api = axios.create({
   baseURL: '/api/v1', // proxied to http://localhost:8080 by Vite in dev
@@ -23,7 +22,7 @@ api.interceptors.response.use(
   (error: unknown) => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       useAuthStore.getState().clearAuth()
-      router.navigate('/login', { replace: true })
+      window.location.replace('/login')
     }
     return Promise.reject(error)
   },
