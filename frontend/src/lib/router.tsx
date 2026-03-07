@@ -6,6 +6,7 @@ import LoginPage from '@/features/auth/components/LoginPage'
 import RegisterPage from '@/features/auth/components/RegisterPage'
 import GroupListPage from '@/features/groups/components/GroupListPage'
 import ChatPage from '@/features/chat/components/ChatPage'
+import { ErrorFallback } from '@/components/ErrorBoundary'
 
 // Wraps all authenticated routes.
 // Reads token synchronously from Zustand (which rehydrates from localStorage).
@@ -28,11 +29,13 @@ function ProtectedRoute() {
 }
 
 export const router = createBrowserRouter([
-  { path: '/login',    element: <LoginPage /> },
-  { path: '/register', element: <RegisterPage /> },
+  { path: '/login',    element: <LoginPage />,    errorElement: <ErrorFallback /> },
+  { path: '/register', element: <RegisterPage />, errorElement: <ErrorFallback /> },
   {
-    // All children share the ProtectedRoute guard
+    // All children share the ProtectedRoute guard.
+    // errorElement here covers GroupListPage, ChatPage, and ProtectedRoute itself.
     element: <ProtectedRoute />,
+    errorElement: <ErrorFallback />,
     children: [
       { path: '/',                   element: <GroupListPage /> },
       { path: '/groups/:groupId',    element: <ChatPage /> },
