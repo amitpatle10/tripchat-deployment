@@ -85,7 +85,7 @@ export default function ChatPage() {
   }, [groupId, queryClient])
 
   return (
-    <div className="h-screen flex flex-col bg-gray-950">
+    <div className="h-screen h-dvh flex flex-col bg-gray-950 overflow-hidden">
 
       <ChatHeader group={group} onlineUsers={onlineUsers} />
 

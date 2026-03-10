@@ -83,7 +83,7 @@ export default function MessageInput({ onSend, sendTyping }: MessageInputProps) 
         value={content}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        placeholder="Message... (Enter to send, Shift+Enter for new line)"
+        placeholder="Message..."
         rows={1}
         className="flex-1 bg-gray-800 border border-gray-700 text-white placeholder-gray-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none overflow-y-hidden"
         aria-label="Message input"
