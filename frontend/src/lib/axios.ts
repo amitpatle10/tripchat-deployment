@@ -3,6 +3,11 @@ import { useAuthStore } from '@/store/authStore'
 
 const api = axios.create({
   baseURL: '/api/v1', // proxied to http://localhost:8080 by Vite in dev
+  // Prevent the browser's HTTP cache from serving stale API responses.
+  // TanStack Query owns our caching strategy — browser disk cache is redundant
+  // and causes "e.map is not a function" crashes when a cached response has
+  // a different shape than the current API contract.
+  headers: { 'Cache-Control': 'no-cache' },
 })
 
 // Attach JWT to every request.
